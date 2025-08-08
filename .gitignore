@@ -205,3 +205,8 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Bot specific files
+patterns.json
+admins.json
+# filters.json - базові фільтри (включено в репозиторій)
