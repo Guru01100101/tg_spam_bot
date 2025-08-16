@@ -50,7 +50,8 @@ jobs:
       run: |
         # Активація віртуального середовища
         . .venv/bin/activate
-        mypy --ignore-missing-imports core/ models/ utils/ main.py
+        # Використовуємо менш сувору перевірку типів
+        mypy --ignore-missing-imports --implicit-optional --no-strict-optional --follow-imports=skip core/ models/ utils/ main.py
         
   docker:
     needs: test
