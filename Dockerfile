@@ -2,8 +2,12 @@ FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-# Install uv
-RUN pip install --no-cache-dir uv
+# Install uv using official method
+RUN apt-get update && \
+    apt-get install -y curl && \
+    curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    mv /root/.local/bin/uv /usr/local/bin/ && \
+    mv /root/.local/bin/uvx /usr/local/bin/
 
 # Copy dependencies specification
 COPY pyproject.toml uv.lock* ./

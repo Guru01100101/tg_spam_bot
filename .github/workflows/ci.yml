@@ -19,33 +19,28 @@ jobs:
         
     - name: Install UV
       run: |
-        curl -sSf https://install.zshell.dev | bash -s -- -y
-        export PATH=/home/runner/.local/bin:$PATH
-        pip install uv
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
         
     - name: Install dependencies
       run: |
-        export PATH=/home/runner/.local/bin:$PATH
         uv pip install pytest flake8 mypy
         uv sync
         
     - name: Run tests
       run: |
-        export PATH=/home/runner/.local/bin:$PATH
-        pytest test_*.py -v
+        uv run pytest test_*.py -v
         
     - name: Lint with flake8
       run: |
-        export PATH=/home/runner/.local/bin:$PATH
         # Stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        uv run flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         # Exit-zero treats all errors as warnings
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        uv run flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
         
     - name: Type check with mypy
       run: |
-        export PATH=/home/runner/.local/bin:$PATH
-        mypy --ignore-missing-imports core/ models/ utils/
+        uv run mypy --ignore-missing-imports core/ models/ utils/
         
   docker:
     needs: test
