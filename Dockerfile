@@ -20,8 +20,10 @@ COPY main.py .
 COPY filters.json .
 # patterns.json and admins.json are created at runtime
 
-# Install dependencies
-RUN uv sync
+# Create virtual environment and install dependencies
+RUN uv venv && \
+    . .venv/bin/activate && \
+    uv sync
 
 # Second stage for smaller image
 FROM python:3.11-slim
@@ -32,7 +34,7 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy application files from builder
+# Copy application files and virtual environment from builder
 COPY --from=builder /app /app
 
 # Default environment variables
@@ -47,5 +49,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 ENV PYTHONUNBUFFERED=1
 
-# Run the bot
-CMD ["uv", "run", "python", "-u", "main.py"]
+# Run the bot with the virtual environment and uv
+CMD ["/bin/bash", "-c", "source /app/.venv/bin/activate && uv run python -u main.py"]
