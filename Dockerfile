@@ -1,4 +1,32 @@
+# Етап збірки
 FROM python:3.11-slim AS builder
+
+# Встановлення базових інструментів
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl ca-certificates && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Встановлення uv з фіксованою версією
+COPY --from=ghcr.io/astral-sh/uv:0.8.11 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.8.11 /uvx /usr/local/bin/uvx
+
+WORKDIR /app
+
+# Копіювання всіх необхідних файлів для збірки
+COPY pyproject.toml ./
+COPY uv.lock* ./
+COPY README.md ./
+COPY core/ core/
+COPY models/ models/
+COPY utils/ utils/
+
+# Створення віртуального середовища та встановлення залежностей
+RUN uv venv && \
+    uv sync --no-editable
+
+# Другий етап - фінальний образ
+FROM python:3.11-slim
 
 # Метадані для образу
 LABEL org.opencontainers.image.title="Telegram Spam Bot"
@@ -10,56 +38,27 @@ LABEL org.opencontainers.image.licenses="MIT"
 
 WORKDIR /app
 
-# Install uv using official method
-RUN apt-get update && \
-    apt-get install -y curl && \
-    curl -LsSf https://astral.sh/uv/install.sh | sh && \
-    mv /root/.local/bin/uv /usr/local/bin/ && \
-    mv /root/.local/bin/uvx /usr/local/bin/
+# Копіювання віртуального середовища з етапу збірки
+COPY --from=builder /app/.venv /app/.venv
 
-# Copy dependencies specification
-COPY pyproject.toml uv.lock* ./
-
-# Copy only necessary files for the application
+# Копіювання файлів додатку
 COPY core/ core/
 COPY models/ models/
 COPY utils/ utils/
 COPY main.py .
 COPY filters.json .
-# patterns.json and admins.json are created at runtime
+# patterns.json та admins.json створюються під час виконання
 
-# Create virtual environment and install dependencies
-RUN uv venv && \
-    . .venv/bin/activate && \
-    uv sync
-
-# Second stage for smaller image
-FROM python:3.11-slim
-
-WORKDIR /app
-
-# Copy only necessary files from the builder stage
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
-
-# Copy application files and virtual environment from builder
-COPY --from=builder /app /app
-COPY --from=builder /app/.venv /app/.venv
-
-# Create logs and data directories
+# Створення директорій для логів і даних
 RUN mkdir -p /app/logs /app/data
 
-# Default environment variables
-ENV BOT_TOKEN=""
-ENV ADMIN_IDS=""
-ENV MUTE_DURATION_DAYS=2
-ENV BAN_DURATION_DAYS=30
+# Налаштування шляху до біну віртуального середовища
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONUNBUFFERED=1
 
-# Health check
+# Перевірка здоров'я
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD python -c "import os, sys; sys.exit(0 if os.path.exists('/app/main.py') else 1)"
 
-ENV PYTHONUNBUFFERED=1
-
-# Run the bot with Python directly (dependencies already in site-packages)
-CMD ["python", "-u", "main.py"]
+# Запуск бота з активованим віртуальним середовищем
+CMD ["uv", "run","python", "-u", "main.py"]

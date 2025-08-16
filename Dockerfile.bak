@@ -1,0 +1,45 @@
+FROM python:3.11-slim
+
+# Метадані для образу
+LABEL org.opencontainers.image.title="Telegram Spam Bot"
+LABEL org.opencontainers.image.description="Bot for telegram chats or groups for deleting spam messages"
+LABEL org.opencontainers.image.url="https://github.com/Guru01100101/tg_spam_bot"
+LABEL org.opencontainers.image.source="https://github.com/Guru01100101/tg_spam_bot"
+LABEL org.opencontainers.image.version="0.2.1"
+LABEL org.opencontainers.image.licenses="MIT"
+
+# Встановлюємо uv через pip для максимальної сумісності
+RUN pip install --no-cache-dir uv
+
+WORKDIR /app
+
+# Копіюємо файл залежностей
+COPY pyproject.toml uv.lock* ./
+
+# Копіюємо файли додатку
+COPY core/ core/
+COPY models/ models/
+COPY utils/ utils/
+COPY main.py .
+COPY filters.json .
+# patterns.json та admins.json створюються під час виконання
+
+# Встановлюємо залежності
+RUN uv sync
+
+# Створюємо директорії для логів і даних
+RUN mkdir -p /app/logs /app/data
+
+# Налаштування змінних середовища
+ENV BOT_TOKEN=""
+ENV ADMIN_IDS=""
+ENV MUTE_DURATION_DAYS=2
+ENV BAN_DURATION_DAYS=30
+ENV PYTHONUNBUFFERED=1
+
+# Перевірка здоров'я
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD python -c "import os, sys; sys.exit(0 if os.path.exists('/app/main.py') else 1)"
+
+# Запуск бота
+CMD ["uv", "run", "python", "-u", "main.py"]

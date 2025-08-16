@@ -1,8 +1,6 @@
-version: '3.8'
-
 services:
   bot:
-    image: guru01100101/tg_spam_bot:stable
+    image: guru01100101/tg-spam-bot:latest
     container_name: telegram_spam_bot
     restart: unless-stopped
     env_file:
