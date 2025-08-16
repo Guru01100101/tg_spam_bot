@@ -36,6 +36,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application files and virtual environment from builder
 COPY --from=builder /app /app
+COPY --from=builder /app/.venv /app/.venv
 
 # Create logs and data directories
 RUN mkdir -p /app/logs /app/data
@@ -52,5 +53,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 ENV PYTHONUNBUFFERED=1
 
-# Run the bot with the virtual environment and uv
-CMD ["/bin/bash", "-c", "source /app/.venv/bin/activate && uv run python -u main.py"]
+# Run the bot with Python directly (dependencies already in site-packages)
+CMD ["python", "-u", "main.py"]

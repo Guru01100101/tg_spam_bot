@@ -75,6 +75,18 @@ jobs:
           # Використовуємо Git теги для версій, якщо доступні
           type=semver,pattern={{version}},enable=${{ github.ref_type == 'tag' }}
     
+    # Виводимо інформацію про теги для відлагодження
+    - name: Debug Docker Meta
+      run: |
+        echo "Docker tags that will be used:"
+        echo "${{ steps.meta.outputs.tags }}"
+    
+    # Перевіряємо, чи запущений workflow в GitHub Actions
+    - name: Check Environment
+      run: |
+        echo "Running in GitHub Actions: ${{ github.event_name }}"
+        echo "Branch: ${{ github.ref }}"
+        
     # Налаштування логіну в DockerHub
     - name: Login to DockerHub
       if: github.event_name != 'pull_request'

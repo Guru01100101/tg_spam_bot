@@ -149,4 +149,5 @@ tg_spam_bot/
 
 - [README-ci.md](README-ci.md) - Детальна інформація про CI/CD інтеграцію
 - [README-docker.md](README-docker.md) - Інструкції щодо запуску через Docker
+- [docs/docker.md](docs/docker.md) - Налаштування Docker і CI/CD публікацій
 - [LICENSE](LICENSE) - Ліцензія проєкту
