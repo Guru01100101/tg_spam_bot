@@ -25,7 +25,7 @@ include-package-data = false
 "*" = ["data/*", "logs/*", "db/*"]
 
 [tool.pytest.ini_options]
-testpaths = ["test_*.py"]
+testpaths = ["tests"]
 python_files = "test_*.py"
 
 [tool.mypy]
