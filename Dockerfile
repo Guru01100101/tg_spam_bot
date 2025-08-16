@@ -37,6 +37,9 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy application files and virtual environment from builder
 COPY --from=builder /app /app
 
+# Create logs and data directories
+RUN mkdir -p /app/logs /app/data
+
 # Default environment variables
 ENV BOT_TOKEN=""
 ENV ADMIN_IDS=""

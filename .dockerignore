@@ -46,6 +46,12 @@ htmlcov/
 logs/
 
 # Dynamic data created by the bot
-# patterns.json та admins.json створюються під час роботи бота
-# Зберігаємо filters.json, оскільки цей файл містить початкову конфігурацію
+# Ці файли можуть бути змінені ботом під час роботи
+# Тому вони будуть монтуватися як томи, а не включатися в образ
+admins.json
+# patterns.json і filters.json включені в образ як початкова конфігурація
+
+# Docker files
+docker-compose.yml
+.dockerignore
 !filters.json

@@ -26,21 +26,40 @@ CI налаштовано за допомогою GitHub Actions і склада
 
 ```bash
 uv pip install pytest flake8 mypy
-pytest test_*.py -v
+pytest tests/ -v
 flake8 .
-mypy --ignore-missing-imports core/ models/ utils/
+mypy --no-check-untyped-defs --ignore-missing-imports core/ models/ utils/ main.py
 ```
 
-### Розгортання (CD)
+### Безперервна доставка (CD)
 
-На даний момент автоматичне розгортання не налаштовано. Для ручного розгортання використовуйте Docker:
+Налаштовано автоматичну публікацію Docker-образів у DockerHub:
+
+1. **Гілка `dev`** — публікується з тегом `latest`
+2. **Гілка `main`** — публікується з тегами:
+   - `stable` — фіксований тег для стабільної версії
+   - `v*.*.*` — версійний тег на основі версії з `pyproject.toml`
+
+#### Налаштування публікації у DockerHub
+
+Для роботи автоматичної публікації необхідно додати секрети в налаштуваннях GitHub репозиторію:
+
+1. Перейдіть в **Settings** → **Secrets and variables** → **Actions**
+2. Додайте два секрети:
+   - `DOCKERHUB_USERNAME`: Ваш логін у DockerHub
+   - `DOCKERHUB_TOKEN`: Токен доступу (створіть в налаштуваннях DockerHub)
+
+#### Використання опублікованих образів
 
 ```bash
-# Збірка
-docker build -t tg_spam_bot .
+# Стабільна версія
+docker run -d --env-file .env --name tg_spam_bot guru01100101/tg_spam_bot:stable
 
-# Запуск
-docker run -d --env-file .env --name tg_spam_bot tg_spam_bot
+# Остання development версія
+docker run -d --env-file .env --name tg_spam_bot guru01100101/tg_spam_bot:latest
+
+# Конкретна версія
+docker run -d --env-file .env --name tg_spam_bot guru01100101/tg_spam_bot:v1.0.0
 ```
 
 Або за допомогою Docker Compose:
@@ -54,7 +73,7 @@ docker-compose up -d
 
 В майбутньому планується розширити систему CI/CD:
 
-1. **Автоматичне розгортання**:
+1. **Автоматичне розгортання на сервері**:
    - Автоматичне оновлення бота на production сервері після успішної збірки
    - Резервне копіювання даних перед оновленням
 
@@ -71,4 +90,20 @@ docker-compose up -d
 - `.github/workflows/ci.yml` - основний конфігураційний файл для GitHub Actions
 - `Dockerfile` - файл для збірки Docker-образу
 - `docker-compose.yml` - конфігурація для розгортання з Docker Compose
-- `test_*.py` - файли з автоматичними тестами
+- `tests/` - директорія з автоматичними тестами
+  - `test_normalize.py` - тести для функціональності нормалізації повідомлень
+  - `test_spam_filter.py` - тести для функціональності фільтрації спаму
+
+## Схема CI/CD процесу
+
+```ascii
+┌────────────┐       ┌─────────────┐      ┌────────────┐
+│ Код у git  │───────► CI тести    │──────► Збірка     │
+└────────────┘       └─────────────┘      └─────┬──────┘
+                                               │
+                                               ▼
+┌────────────┐       ┌─────────────┐      ┌────────────┐
+│ Запуск     │◄──────┤ Розгортання │◄─────┤ DockerHub  │
+│ бота       │       │ на сервері  │      │ публікація │
+└────────────┘       └─────────────┘      └────────────┘
+```

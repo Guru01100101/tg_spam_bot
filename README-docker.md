@@ -52,6 +52,50 @@ docker run -d \
   -v $(pwd)/data/admins.json:/app/admins.json \
   -v $(pwd)/data/char_map.json:/app/char_map.json \
   -v $(pwd)/logs:/app/logs \
+  guru01100101/tg_spam_bot:stable
+```
+
+### Локальна збірка Docker образу
+
+Якщо ви хочете зібрати Docker образ локально:
+
+```bash
+# Збірка образу
+docker build -t tg_spam_bot .
+
+# Запуск з локальним образом
+docker run -d \
+  --name telegram_spam_bot \
+  -e BOT_TOKEN="your_bot_token_here" \
+  -e ADMIN_IDS="123456789" \
+  -v $(pwd)/filters.json:/app/filters.json \
+  -v $(pwd)/data/patterns.json:/app/patterns.json \
+  -v $(pwd)/data/admins.json:/app/admins.json \
+  -v $(pwd)/data/char_map.json:/app/char_map.json \
+  -v $(pwd)/logs:/app/logs \
+  tg_spam_bot
+```
+
+Або використовуйте Docker Compose з локальною збіркою:
+
+```bash
+# У файлі docker-compose.yml змініть конфігурацію:
+# замість рядка "image: guru01100101/tg_spam_bot:stable"
+# додайте блок конфігурації збірки:
+build:
+  context: .
+  dockerfile: Dockerfile
+```
+
+Потім запустіть збірку та запуск:
+
+```bash
+docker-compose up -d --build
+```
+
+  -v $(pwd)/data/admins.json:/app/admins.json \
+  -v $(pwd)/data/char_map.json:/app/char_map.json \
+  -v $(pwd)/logs:/app/logs \
   guru01100101/tg-spam-bot:latest
 ```
 

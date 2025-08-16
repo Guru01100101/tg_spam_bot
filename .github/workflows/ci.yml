@@ -35,7 +35,7 @@ jobs:
       run: |
         # Активація віртуального середовища
         . .venv/bin/activate
-        pytest test_*.py -v
+        pytest tests/ -v
         
     - name: Lint with flake8
       run: |
@@ -51,28 +51,68 @@ jobs:
         # Активація віртуального середовища
         . .venv/bin/activate
         # Використовуємо менш сувору перевірку типів
-        mypy --ignore-missing-imports --implicit-optional --no-strict-optional --follow-imports=skip core/ models/ utils/ main.py
+        mypy --no-check-untyped-defs --ignore-missing-imports core/ models/ utils/ main.py
         
   docker:
     needs: test
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Отримуємо всі теги і коміти для правильного визначення версії
     
+    # Визначення версії з тега або гілки
+    - name: Set Docker Meta
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: guru01100101/tg_spam_bot # Замініть на свій DockerHub username та назву репозиторію
+        tags: |
+          # Завжди використовуємо latest для dev гілки
+          type=raw,value=latest,enable=${{ github.ref == 'refs/heads/dev' }}
+          # Використовуємо stable для main гілки
+          type=raw,value=stable,enable=${{ github.ref == 'refs/heads/main' }}
+          # Використовуємо Git теги для версій, якщо доступні
+          type=semver,pattern={{version}},enable=${{ github.ref_type == 'tag' }}
+    
+    # Налаштування логіну в DockerHub
+    - name: Login to DockerHub
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+        
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
       
-    - name: Build and export Docker image
+    # Збірка і публікація в DockerHub (тільки якщо не PR)
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        # Кешуємо шари для прискорення збірки
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        
+    # Експорт локально для артефакту (тільки якщо PR)
+    - name: Export Docker image for PR
+      if: github.event_name == 'pull_request'
       uses: docker/build-push-action@v5
       with:
         context: .
         push: false
-        tags: tg_spam_bot:latest
+        tags: guru01100101/tg_spam_bot:pr-${{ github.event.pull_request.number }}
         outputs: type=docker,dest=/tmp/tg_spam_bot.tar
         
-    - name: Upload artifact
+    # Завантаження артефакту (тільки якщо PR)
+    - name: Upload artifact for PR
+      if: github.event_name == 'pull_request'
       uses: actions/upload-artifact@v4
       with:
-        name: tg_spam_bot
+        name: tg_spam_bot-pr-${{ github.event.pull_request.number }}
         path: /tmp/tg_spam_bot.tar
         retention-days: 5 # Зберігати артефакт протягом 5 днів

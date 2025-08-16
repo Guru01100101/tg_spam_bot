@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   bot:
-    image: guru01100101/tg-spam-bot:latest  # Використовуємо готовий образ або замініть на build для локальної збірки
+    image: guru01100101/tg_spam_bot:stable
     container_name: telegram_spam_bot
     restart: unless-stopped
     env_file:
