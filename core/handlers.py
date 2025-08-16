@@ -2,8 +2,71 @@ import asyncio
 from datetime import datetime, timedelta
 from functools import partial
 from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command, CommandObject
 from aiogram.enums.chat_member_status import ChatMemberStatus
 from utils.regex import SpamFilter
+
+async def handle_report(
+    message: types.Message, 
+    bot: Bot,
+    ban_duration_days: int,
+    mute_duration_days: int,
+    admin_panel=None
+):
+    """
+    Обробка користувацьких репортів спаму.
+    Користувачі можуть відповісти на спам-повідомлення командою !бан або !спам
+    """
+    # Перевіряємо, чи є це відповіддю на інше повідомлення
+    if not message.reply_to_message:
+        await message.reply(
+            "❌ Цю команду потрібно використовувати як відповідь на повідомлення, на яке ви хочете поскаржитись."
+        )
+        return
+    
+    reported_message = message.reply_to_message
+    reporter = message.from_user
+    reported_user = reported_message.from_user
+    
+    # Логуємо репорт
+    print(f"Report from {reporter.username} on message by {reported_user.username}: {reported_message.text}")
+    
+    # Не дозволяємо репортити адміністраторів
+    try:
+        reported_chat_member = await bot.get_chat_member(
+            chat_id=message.chat.id,
+            user_id=reported_user.id
+        )
+        
+        if reported_chat_member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR]:
+            await message.reply("❌ Ви не можете поскаржитись на повідомлення від адміністратора.")
+            return
+    except Exception as e:
+        print(f"Error checking reported user status: {e}")
+        await message.reply("❌ Помилка при перевірці статусу користувача.")
+        return
+    
+    try:
+        # Пересилаємо повідомлення адміністраторам
+        if admin_panel:
+            await admin_panel.forward_reported_message(
+                reported_message,
+                message.chat.id,
+                reported_user.id,
+                reporter.id
+            )
+            
+            # Повідомляємо користувача про успішний репорт
+            await message.reply(
+                f"✅ Дякуємо за пильність! Повідомлення передано адміністраторам."
+            )
+            
+            # Видаляємо повідомлення з репортом для чистоти чату
+            await message.delete()
+            
+    except Exception as e:
+        print(f"Error processing report: {e}")
+        await message.reply("❌ Помилка при обробці скарги.")
 
 async def handle_all_messages(
     message: types.Message, 
@@ -18,6 +81,11 @@ async def handle_all_messages(
     If message contains spam, it will be deleted and the user will be banned for 30 days.
     If the user is an admin or owner, the message will be deleted only (without banning).
     """
+    # Перевірка на команди репорту
+    if message.text and message.text.lower() in ['!бан', '!спам'] and message.reply_to_message:
+        await handle_report(message, bot, ban_duration_days, mute_duration_days, admin_panel)
+        return
+    
     # Логуємо всі повідомлення для діагностики
     print(f"Handling message: {message.text} from {message.from_user.username} in {message.chat.title}")
     
@@ -72,6 +140,7 @@ async def handle_all_messages(
 
 def register_handlers(dp: Dispatcher, bot: Bot, spam_filter: SpamFilter, ban_duration_days: int, mute_duration_days: int, admin_panel=None):
     """Register all handlers for the bot."""
+    # Реєструємо обробник для всіх повідомлень
     dp.message.register(
         partial(
             handle_all_messages,
