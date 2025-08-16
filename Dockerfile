@@ -61,4 +61,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD python -c "import os, sys; sys.exit(0 if os.path.exists('/app/main.py') else 1)"
 
 # Запуск бота з активованим віртуальним середовищем
-CMD ["uv", "run","python", "-u", "main.py"]
+CMD ["python", "-u", "main.py"]
