@@ -83,7 +83,8 @@ class SpamFilter:
         return self.compiled_pattern.search(normalized_message) is not None
     
     def normalize_message(self, text: str) -> str:
-        """Нормалізує повідомлення, замінюючи всі символи-замінники на кириличні відповідники"""
+        """Нормалізує повідомлення, замінюючи всі символи-замінники на кириличні відповідники
+        та видаляючи пробіли, спеціальні символи та розділові знаки"""
         if not text:
             return ""
         
@@ -123,6 +124,52 @@ class SpamFilter:
                 result = result.replace(latin, cyrillic)
                 if os.environ.get("DEBUG_NORMALIZE"):
                     print(f"Заміна '{latin}' -> '{cyrillic}': '{result}'")
+        
+        # Список символів, які треба зберегти в нормалізованому тексті
+        keep_chars = set('абвгґдеёєжзийіїклмнопрстуфхцчшщьъыэюя' + 
+                         'abcdefghijklmnopqrstuvwxyz' + 
+                         '0123456789')
+        
+        # Видаляємо пробіли, табуляції, нові рядки та інші пробільні символи
+        result = re.sub(r'\s+', '', result)
+        
+        # Видаляємо всі символи, крім тих, що в keep_chars
+        result = ''.join(c for c in result if c in keep_chars)
+        
+        if os.environ.get("DEBUG_NORMALIZE"):
+            print(f"Після видалення пробілів і спецсимволів: '{result}'")
+        
+        return result
+        
+    def normalize_message_before(self, text: str) -> str:
+        """
+        Попередня версія нормалізації, яка не видаляла пробіли та спецсимволи.
+        Вона була вразлива до обходу спам-фільтра шляхом вставки пробілів між літерами.
+        """
+        if not text:
+            return ""
+        
+        # Приводимо до нижнього регістру
+        result = text.lower()
+        
+        # Спочатку обробляємо спеціальні випадки для багатосимвольних комбінацій
+        for cyrillic, latin_list in self.char_map.items():
+            if len(cyrillic) > 1:
+                for latin in latin_list:
+                    if latin in result:
+                        result = result.replace(latin, cyrillic)
+        
+        # Потім замінюємо складені послідовності з reverse_char_map
+        multi_char_replacements = {k: v for k, v in self.reverse_char_map.items() if len(k) > 1}
+        for latin, cyrillic in sorted(multi_char_replacements.items(), key=lambda x: len(x[0]), reverse=True):
+            if latin in result:
+                result = result.replace(latin, cyrillic)
+            
+        # В кінці замінюємо одиночні символи
+        single_char_replacements = {k: v for k, v in self.reverse_char_map.items() if len(k) == 1}
+        for latin, cyrillic in single_char_replacements.items():
+            if latin in result:
+                result = result.replace(latin, cyrillic)
         
         return result
     
