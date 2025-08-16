@@ -66,7 +66,7 @@ jobs:
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: guru01100101/tg_spam_bot # Замініть на свій DockerHub username та назву репозиторію
+        images: guru01100101/tg-spam-bot # Правильна назва репозиторію
         tags: |
           # Завжди використовуємо latest для dev гілки
           type=raw,value=latest,enable=${{ github.ref == 'refs/heads/dev' }}
@@ -117,14 +117,14 @@ jobs:
       with:
         context: .
         push: false
-        tags: guru01100101/tg_spam_bot:pr-${{ github.event.pull_request.number }}
-        outputs: type=docker,dest=/tmp/tg_spam_bot.tar
+        tags: guru01100101/tg-spam-bot:pr-${{ github.event.pull_request.number }}
+        outputs: type=docker,dest=/tmp/tg-spam-bot.tar
         
     # Завантаження артефакту (тільки якщо PR)
     - name: Upload artifact for PR
       if: github.event_name == 'pull_request'
       uses: actions/upload-artifact@v4
       with:
-        name: tg_spam_bot-pr-${{ github.event.pull_request.number }}
-        path: /tmp/tg_spam_bot.tar
+        name: tg-spam-bot-pr-${{ github.event.pull_request.number }}
+        path: /tmp/tg-spam-bot.tar
         retention-days: 5 # Зберігати артефакт протягом 5 днів

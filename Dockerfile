@@ -1,5 +1,13 @@
 FROM python:3.11-slim AS builder
 
+# Метадані для образу
+LABEL org.opencontainers.image.title="Telegram Spam Bot"
+LABEL org.opencontainers.image.description="Bot for telegram chats or groups for deleting spam messages"
+LABEL org.opencontainers.image.url="https://github.com/Guru01100101/tg_spam_bot"
+LABEL org.opencontainers.image.source="https://github.com/Guru01100101/tg_spam_bot"
+LABEL org.opencontainers.image.version="0.2.1"
+LABEL org.opencontainers.image.licenses="MIT"
+
 WORKDIR /app
 
 # Install uv using official method
