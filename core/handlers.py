@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime, timedelta
 from functools import partial
+from typing import Optional, Any
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command, CommandObject
 from aiogram.enums.chat_member_status import ChatMemberStatus
@@ -11,8 +12,8 @@ async def handle_report(
     bot: Bot,
     ban_duration_days: int,
     mute_duration_days: int,
-    admin_panel=None
-):
+    admin_panel: Optional[Any] = None
+) -> None:
     """
     Обробка користувацьких репортів спаму.
     Користувачі можуть відповісти на спам-повідомлення командою !бан або !спам
@@ -74,8 +75,8 @@ async def handle_all_messages(
     spam_filter: SpamFilter,
     ban_duration_days: int,
     mute_duration_days: int,
-    admin_panel=None
-):
+    admin_panel: Optional[Any] = None
+) -> None:
     """
     Handler for all messages in all chats.
     If message contains spam, it will be deleted and the user will be banned for 30 days.
@@ -138,7 +139,14 @@ async def handle_all_messages(
     else:
         print(f"Message is not spam: {message.text}")
 
-def register_handlers(dp: Dispatcher, bot: Bot, spam_filter: SpamFilter, ban_duration_days: int, mute_duration_days: int, admin_panel=None):
+def register_handlers(
+    dp: Dispatcher, 
+    bot: Bot, 
+    spam_filter: SpamFilter, 
+    ban_duration_days: int, 
+    mute_duration_days: int, 
+    admin_panel: Optional[Any] = None
+) -> None:
     """Register all handlers for the bot."""
     # Реєструємо обробник для всіх повідомлень
     dp.message.register(

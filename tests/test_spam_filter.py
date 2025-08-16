@@ -27,21 +27,21 @@ def test_basic_spam_detection():
     """Test basic spam detection functionality"""
     spam_filter = SpamFilter()
     
-    # Add a test pattern
-    spam_filter.add_pattern('spam')
+    # Додаємо паттерн кирилицею (російською мовою)
+    spam_filter.add_pattern('ставка')
     
     # Test messages
-    assert spam_filter.is_spam("This is spam message") == True
-    assert spam_filter.is_spam("This is a normal message") == False
+    assert spam_filter.is_spam("ставка") == True
+    assert spam_filter.is_spam("звичайне повідомлення") == False
 
 def test_case_insensitivity():
     """Test case-insensitive matching"""
     spam_filter = SpamFilter()
     
-    # Add a test pattern
-    spam_filter.add_pattern('spam')
+    # Додаємо паттерн кирилицею (українською мовою)
+    spam_filter.add_pattern('ставка')
     
-    # Test different cases
-    assert spam_filter.is_spam("This is SPAM message") == True
-    assert spam_filter.is_spam("This is Spam message") == True
-    assert spam_filter.is_spam("This is sPaM message") == True
+    # Test different cases - перевіряємо регістронезалежність (різні регістри кирилиці)
+    assert spam_filter.is_spam("СТАВКА") == True
+    assert spam_filter.is_spam("Ставка") == True
+    assert spam_filter.is_spam("сТаВкА") == True

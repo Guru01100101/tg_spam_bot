@@ -1,15 +1,16 @@
 import re
 import json
 import os
-from typing import List, Set, Dict, Any
+from typing import List, Set, Dict, Any, Optional, Pattern
 
 class SpamFilter:
-    def __init__(self, initial_pattern: str = "", flags=re.IGNORECASE):
+    def __init__(self, initial_pattern: str = "", flags: re.RegexFlag = re.IGNORECASE):
         self.patterns: Set[str] = set()
-        self.flags = flags
-        self.compiled_pattern = None
+        self.flags: re.RegexFlag = flags
+        self.compiled_pattern: Optional[re.Pattern] = None
         self.char_map: Dict[str, List[str]] = {}
         self.reverse_char_map: Dict[str, str] = {}  # Для нормалізації повідомлень
+        self.ambiguous_chars: Dict[str, List[str]] = {}  # Неоднозначні символи
         
         # Завантажуємо словник відповідності символів
         self.load_char_map()
@@ -28,7 +29,7 @@ class SpamFilter:
         self.load_patterns()
         self._compile_patterns()
         
-    def load_default_filters(self):
+    def load_default_filters(self) -> None:
         """Завантажує базові фільтри з filters.json"""
         try:
             if os.path.exists("filters.json"):
@@ -40,7 +41,15 @@ class SpamFilter:
             print(f"Error loading default filters: {e}")
         
     def add_pattern(self, pattern: str) -> bool:
-        """Додає новий паттерн до списку фільтрації"""
+        """
+        Додає новий паттерн до списку фільтрації
+        
+        Args:
+            pattern: Регулярний вираз для пошуку спаму
+            
+        Returns:
+            bool: True якщо паттерн успішно додано, False в іншому випадку
+        """
         if pattern.strip():
             self.patterns.add(pattern.strip())
             self._compile_patterns()
@@ -49,7 +58,15 @@ class SpamFilter:
         return False
     
     def remove_pattern(self, pattern: str) -> bool:
-        """Видаляє паттерн зі списку фільтрації"""
+        """
+        Видаляє паттерн зі списку фільтрації
+        
+        Args:
+            pattern: Регулярний вираз для видалення
+            
+        Returns:
+            bool: True якщо паттерн успішно видалено, False в іншому випадку
+        """
         if pattern in self.patterns:
             self.patterns.remove(pattern)
             self._compile_patterns()
@@ -61,7 +78,7 @@ class SpamFilter:
         """Повертає список всіх паттернів"""
         return list(self.patterns)
     
-    def _compile_patterns(self):
+    def _compile_patterns(self) -> None:
         """Компілює всі паттерни в один регулярний вираз"""
         if not self.patterns:
             self.compiled_pattern = None
@@ -76,15 +93,135 @@ class SpamFilter:
         if not self.compiled_pattern:
             return False
         
-        # Нормалізуємо повідомлення перед перевіркою
-        normalized_message = self.normalize_message(message)
+        # Генеруємо всі можливі варіанти нормалізованого повідомлення
+        normalized_variants = self.generate_normalized_variants(message)
         
-        # Шукаємо паттерн у нормалізованому повідомленні
-        return self.compiled_pattern.search(normalized_message) is not None
+        # Перевіряємо кожен варіант на наявність патернів
+        for variant in normalized_variants:
+            if self.compiled_pattern.search(variant) is not None:
+                return True
+                
+        return False
+        
+    def generate_normalized_variants(self, text: str) -> List[str]:
+        """
+        Генерує різні варіанти нормалізованого тексту, враховуючи різні 
+        можливі інтерпретації символів.
+        
+        Args:
+            text: Вхідний текст для нормалізації
+            
+        Returns:
+            List[str]: Список різних варіантів нормалізованого тексту
+        """
+        # Базовий варіант - стандартна нормалізація
+        base_variant = self.normalize_message(text)
+        
+        # Список всіх варіантів, починаючи з базового
+        variants = [base_variant]
+        
+        # Використовуємо динамічно виявлені неоднозначні символи
+        lowercase_text = text.lower()
+        
+        # Спочатку обробляємо статичні особливі випадки для багатосимвольних комбінацій
+        special_multi_chars = {
+            'bi': ['би', 'бі'],     # 'bi' може бути 'би' або 'бі'
+            'sh': ['ш', 'сх'],      # 'sh' може бути 'ш' або 'сх'
+            'ch': ['ч', 'кх']       # 'ch' може бути 'ч' або 'кх'
+        }
+        
+        for symbol, alternatives in special_multi_chars.items():
+            if symbol in lowercase_text:
+                for alt in alternatives[1:]:  # Пропускаємо першу альтернативу
+                    normalized_with_alt = self.normalize_with_specific_mapping(text, symbol, alt)
+                    variants.append(normalized_with_alt)
+                    
+        # Потім обробляємо динамічно виявлені неоднозначні символи
+        if hasattr(self, 'ambiguous_chars'):
+            for symbol, alternatives in self.ambiguous_chars.items():
+                if symbol in lowercase_text and len(alternatives) > 1:
+                    # Стандартна нормалізація вже використовує перший варіант,
+                    # тому додаємо варіанти з альтернативними замінами
+                    for alt in alternatives[1:]:
+                        normalized_with_alt = self.normalize_with_specific_mapping(text, symbol, alt)
+                        variants.append(normalized_with_alt)
+                
+        # Додаємо також інші особливі випадки, які не покриті автоматичним виявленням
+        special_single_chars = {
+            'b': ['б', 'ь'],        # Латинська 'b' може бути 'б' або 'ь'
+            'y': ['у', 'и', 'й'],   # Латинська 'y' може бути 'у', 'и' або 'й'
+            'h': ['г', 'х']         # Латинська 'h' може бути 'г' або 'х'
+        }
+        
+        # Перевіряємо, щоб не дублювати вже оброблені випадки
+        for symbol, alternatives in special_single_chars.items():
+            if symbol in lowercase_text and (not hasattr(self, 'ambiguous_chars') or symbol not in self.ambiguous_chars):
+                for alt in alternatives[1:]:
+                    normalized_with_alt = self.normalize_with_specific_mapping(text, symbol, alt)
+                    variants.append(normalized_with_alt)
+                    
+        return variants
     
+    def normalize_with_specific_mapping(self, text: str, symbol: str, replacement: str) -> str:
+        """
+        Нормалізує текст із заміною конкретного символу на вказаний варіант заміни.
+        Використовується для створення альтернативних варіантів нормалізації.
+        
+        Args:
+            text: Вхідний текст для нормалізації
+            symbol: Символ, який потрібно замінити
+            replacement: Варіант заміни символу
+            
+        Returns:
+            str: Нормалізований текст з конкретною заміною
+        """
+        # Спочатку виконуємо базову нормалізацію
+        result = text.lower()
+        
+        # Замінюємо конкретний символ на вказаний варіант
+        result = result.replace(symbol, replacement)
+        
+        # Далі проводимо стандартну нормалізацію, як у звичайному методі
+        # Спочатку обробляємо спеціальні випадки для багатосимвольних комбінацій
+        for cyrillic, latin_list in self.char_map.items():
+            if len(cyrillic) > 1:
+                for latin in latin_list:
+                    if latin in result and latin != symbol:  # Пропускаємо символ, який ми вже замінили
+                        result = result.replace(latin, cyrillic)
+        
+        # Потім замінюємо складені послідовності з reverse_char_map
+        multi_char_replacements = {k: v for k, v in self.reverse_char_map.items() if len(k) > 1}
+        for latin, cyrillic in sorted(multi_char_replacements.items(), key=lambda x: len(x[0]), reverse=True):
+            if latin in result and latin != symbol:  # Пропускаємо символ, який ми вже замінили
+                result = result.replace(latin, cyrillic)
+            
+        # В кінці замінюємо одиночні символи
+        single_char_replacements = {k: v for k, v in self.reverse_char_map.items() if len(k) == 1}
+        for latin, cyrillic in single_char_replacements.items():
+            if latin in result and latin != symbol:  # Пропускаємо символ, який ми вже замінили
+                result = result.replace(latin, cyrillic)
+        
+        # Список символів, які треба зберегти
+        keep_chars = set('абвгґдеёєжзийіїклмнопрстуфхцчшщьъыэюя' + 
+                         'abcdefghijklmnopqrstuvwxyz' + 
+                         '0123456789')
+        
+        # Видаляємо пробіли та спеціальні символи
+        result = re.sub(r'\s+', '', result)
+        result = ''.join(c for c in result if c in keep_chars)
+        
+        return result
+        
     def normalize_message(self, text: str) -> str:
         """Нормалізує повідомлення, замінюючи всі символи-замінники на кириличні відповідники
-        та видаляючи пробіли, спеціальні символи та розділові знаки"""
+        та видаляючи пробіли, спеціальні символи та розділові знаки
+        
+        Args:
+            text: Вхідний текст для нормалізації
+            
+        Returns:
+            str: Нормалізований текст
+        """
         if not text:
             return ""
         
@@ -173,21 +310,38 @@ class SpamFilter:
         
         return result
     
-    def _build_reverse_char_map(self):
+    def _build_reverse_char_map(self) -> None:
         """Створює зворотню карту символів для нормалізації повідомлень"""
         self.reverse_char_map = {}
+        
+        # Словник для відстеження неоднозначностей: латинський символ -> список кириличних варіантів
+        self.ambiguous_chars = {}
         
         for cyrillic, latin_list in self.char_map.items():
             # Пропускаємо складені комбінації з кириличних символів (такі як 'би')
             # Вони обробляються окремо
             if len(cyrillic) > 1:
+                for latin in latin_list:
+                    # Додаємо складені комбінації до reverse_char_map
+                    self.reverse_char_map[latin] = cyrillic
                 continue
                 
             for latin in latin_list:
+                # Перевіряємо чи цей латинський символ вже має кириличний відповідник
+                if latin in self.reverse_char_map:
+                    # Якщо так, то це неоднозначний символ, додаємо його до списку неоднозначностей
+                    if latin not in self.ambiguous_chars:
+                        self.ambiguous_chars[latin] = [self.reverse_char_map[latin]]
+                    self.ambiguous_chars[latin].append(cyrillic)
+                
                 # Для кожного латинського символу-замінника зберігаємо кириличний відповідник
+                # Навіть якщо він вже має інший відповідник, ми перезаписуємо його
+                # але зберігаємо інформацію про неоднозначність в ambiguous_chars
                 self.reverse_char_map[latin] = cyrillic
                 
         print(f"Створено зворотню карту символів ({len(self.reverse_char_map)} замінників)")
+        if self.ambiguous_chars:
+            print(f"Знайдено {len(self.ambiguous_chars)} неоднозначних символів")
         
     def get_pattern_matches(self, message: str) -> List[str]:
         """Повертає список знайдених патернів у повідомленні"""
@@ -207,7 +361,7 @@ class SpamFilter:
                 
         return matches
     
-    def save_patterns(self):
+    def save_patterns(self) -> None:
         """Зберігає паттерни в файл"""
         try:
             with open("patterns.json", "w", encoding="utf-8") as f:
@@ -215,7 +369,7 @@ class SpamFilter:
         except Exception as e:
             print(f"Error saving patterns: {e}")
     
-    def load_patterns(self):
+    def load_patterns(self) -> None:
         """Завантажує паттерни з файлу"""
         try:
             if os.path.exists("patterns.json"):
@@ -225,7 +379,7 @@ class SpamFilter:
         except Exception as e:
             print(f"Error loading patterns: {e}")
             
-    def load_char_map(self):
+    def load_char_map(self) -> None:
         """Завантажує словник відповідності символів з файлу"""
         try:
             if os.path.exists("char_map.json"):
