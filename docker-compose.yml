@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  bot:
+    image: guru01100101/tg-spam-bot:latest  # Використовуємо готовий образ або замініть на build для локальної збірки
+    container_name: telegram_spam_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # Mount these files to persist data between container restarts
+      - ./filters.json:/app/filters.json
+      - ./data/patterns.json:/app/patterns.json
+      - ./data/admins.json:/app/admins.json
+      - ./data/char_map.json:/app/char_map.json
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, sys; sys.exit(0 if os.path.exists('/app/main.py') else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s

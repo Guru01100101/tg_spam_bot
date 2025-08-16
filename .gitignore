@@ -209,4 +209,5 @@ __marimo__/
 # Bot specific files
 patterns.json
 admins.json
+char_map.json
 # filters.json - базові фільтри (включено в репозиторій)

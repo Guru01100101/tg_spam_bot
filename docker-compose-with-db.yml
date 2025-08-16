@@ -1,0 +1,70 @@
+# Заготовка для майбутньої інтеграції з базою даних
+# Розкоментуйте та налаштуйте, коли вирішите додати БД
+
+version: '3.8'
+
+services:
+  bot:
+    image: guru01100101/tg-spam-bot:latest
+    container_name: telegram_spam_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./filters.json:/app/filters.json
+      - ./data/patterns.json:/app/patterns.json
+      - ./data/admins.json:/app/admins.json
+      - ./data/char_map.json:/app/char_map.json
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, sys; sys.exit(0 if os.path.exists('/app/main.py') else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    depends_on:
+      - database
+
+  # База даних PostgreSQL
+  database:
+    image: postgres:15-alpine
+    container_name: tg_spam_bot_db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=tgbot
+      - POSTGRES_PASSWORD=your_secure_password
+      - POSTGRES_DB=spam_bot
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Скрипти ініціалізації (створення таблиць, індексів тощо)
+      - ./db/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tgbot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Адміністративна панель для бази даних (опціонально)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: tg_spam_bot_pgadmin
+    restart: unless-stopped
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@example.com
+      - PGADMIN_DEFAULT_PASSWORD=admin_password
+      - PGADMIN_CONFIG_SERVER_MODE=False
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    depends_on:
+      - database
+
+volumes:
+  postgres_data:
+  pgadmin_data:
+
+networks:
+  default:
+    driver: bridge

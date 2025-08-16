@@ -7,4 +7,35 @@ requires-python = ">=3.11"
 dependencies = [
     "aiogram==3.10.0",
     "python-dotenv==1.0.1",
+    "pytest>=7.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
 ]
+
+[build-system]
+requires = ["setuptools>=42.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["core", "models", "utils"]
+include-package-data = false
+
+# Вказуємо, що директорії data та logs не є пакетами
+[tool.setuptools.exclude-package-data]
+"*" = ["data/*", "logs/*", "db/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["test_*.py"]
+python_files = "test_*.py"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
+[tool.flake8]
+max-line-length = 127
+exclude = [".git", "__pycache__", "build", "dist"]
+select = ["E9", "F63", "F7", "F82"]

@@ -1,0 +1,51 @@
+# Git
+.git
+.gitignore
+.github
+
+# Environment files
+.env
+env.example
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Tests
+test_*.py
+pytest_cache/
+.coverage
+htmlcov/
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Dynamic data created by the bot
+# patterns.json та admins.json створюються під час роботи бота
+# Зберігаємо filters.json, оскільки цей файл містить початкову конфігурацію
+!filters.json
