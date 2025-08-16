@@ -1,6 +1,7 @@
 import asyncio
 import json
 from datetime import datetime, timedelta
+from typing import Any
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -40,8 +41,8 @@ class AdminPanel:
         self.dp = dp
         self.admin_ids = ADMIN_IDS
         self.spam_filter = spam_filter
-        self.deleted_messages = {}  # Зберігаємо інформацію про видалені повідомлення
-        self.pending_actions = {}   # Для сумісності з handler
+        self.deleted_messages: dict[int, dict[str, Any]] = {}  # Зберігаємо інформацію про видалені повідомлення
+        self.pending_actions: dict[str, dict[str, Any]] = {}   # Для сумісності з handler
         self.cleanup_old_messages()
 
     def cleanup_old_messages(self):
@@ -405,8 +406,10 @@ class AdminPanel:
     async def mute_user_from_callback(self, callback: types.CallbackQuery, data: str):
         """Обробляє запит на заглушення користувача"""
         try:
-            _, user_id, chat_id = data.split(":")
-            user_id, chat_id = int(user_id), int(chat_id)
+            parts = data.split(":")
+            user_id_str, chat_id_str = parts[1], parts[2]
+            user_id: int = int(user_id_str)
+            chat_id: int = int(chat_id_str)
             
             await self.bot.restrict_chat_member(
                 chat_id=chat_id,
@@ -436,8 +439,10 @@ class AdminPanel:
     async def delete_reported_message(self, callback: types.CallbackQuery, data: str):
         """Обробляє запит на видалення повідомлення, на яке поскаржились"""
         try:
-            _, msg_id, chat_id = data.split(":")
-            msg_id, chat_id = int(msg_id), int(chat_id)
+            parts = data.split(":")
+            msg_id_str, chat_id_str = parts[1], parts[2]
+            msg_id: int = int(msg_id_str)
+            chat_id: int = int(chat_id_str)
             
             if msg_id in self.deleted_messages:
                 # Спробуємо видалити повідомлення
@@ -473,8 +478,10 @@ class AdminPanel:
     
     async def ban_user_from_callback(self, callback: types.CallbackQuery, data: str):
         try:
-            _, user_id, chat_id = data.split(":")
-            user_id, chat_id = int(user_id), int(chat_id)
+            parts = data.split(":")
+            user_id_str, chat_id_str = parts[1], parts[2]
+            user_id: int = int(user_id_str)
+            chat_id: int = int(chat_id_str)
             await self.bot.ban_chat_member(
                 chat_id=chat_id,
                 user_id=user_id,
@@ -491,8 +498,10 @@ class AdminPanel:
 
     async def restore_message_from_callback(self, callback: types.CallbackQuery, data: str):
         try:
-            _, msg_id, chat_id = data.split(":")
-            msg_id, chat_id = int(msg_id), int(chat_id)
+            parts = data.split(":")
+            msg_id_str, chat_id_str = parts[1], parts[2]
+            msg_id: int = int(msg_id_str)
+            chat_id: int = int(chat_id_str)
             if msg_id in self.deleted_messages:
                 msg_info = self.deleted_messages[msg_id]
                 user_display = make_user_tag(types.User(
