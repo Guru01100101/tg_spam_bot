@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 FROM python:3.11-slim
 
 # Встановити build-залежності (опціонально)
@@ -9,7 +8,6 @@ RUN pip install --no-cache-dir uv
 WORKDIR /app
 
 COPY pyproject.toml ./
-=======
 # Етап збірки
 FROM python:3.11-slim AS builder
 
@@ -54,20 +52,17 @@ WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 
 # Копіювання файлів додатку
->>>>>>> 1a524b98ac2e66a542b773fb1d13a2c1b350fcdc
 COPY core/ core/
 COPY models/ models/
 COPY utils/ utils/
 COPY main.py .
 COPY filters.json .
-<<<<<<< HEAD
 
 RUN uv sync
 
 ENV PYTHONUNBUFFERED=1
 
 CMD ["uv", "run", "python", "-u", "main.py"]
-=======
 # patterns.json та admins.json створюються під час виконання
 
 # Створення директорій для логів і даних
@@ -83,4 +78,3 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # Запуск бота з активованим віртуальним середовищем
 CMD ["python", "-u", "main.py"]
->>>>>>> 1a524b98ac2e66a542b773fb1d13a2c1b350fcdc
