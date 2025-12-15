@@ -58,9 +58,6 @@ COPY utils/ utils/
 COPY main.py .
 COPY filters.json .
 
-ENV PYTHONUNBUFFERED=1
-
-CMD ["uv", "run", "python", "-u", "main.py"]
 # patterns.json та admins.json створюються під час виконання
 
 # Створення директорій для логів і даних
