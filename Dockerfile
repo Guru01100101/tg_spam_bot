@@ -58,8 +58,6 @@ COPY utils/ utils/
 COPY main.py .
 COPY filters.json .
 
-RUN uv sync
-
 ENV PYTHONUNBUFFERED=1
 
 CMD ["uv", "run", "python", "-u", "main.py"]
