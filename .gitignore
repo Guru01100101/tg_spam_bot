@@ -158,6 +158,7 @@ venv.bak/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+.mypy_baseline.txt
 
 # Pyre type checker
 .pyre/
@@ -209,4 +210,5 @@ __marimo__/
 # Bot specific files
 patterns.json
 admins.json
+char_map.json
 # filters.json - базові фільтри (включено в репозиторій)

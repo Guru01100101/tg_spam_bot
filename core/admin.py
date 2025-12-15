@@ -1,6 +1,7 @@
 import asyncio
 import json
 from datetime import datetime, timedelta
+from typing import Any
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -16,6 +17,10 @@ class AdminStates(StatesGroup):
     waiting_for_word_to_remove = State()
     waiting_for_admin_id_to_add = State()
     waiting_for_admin_id_to_remove = State()
+    waiting_for_char_to_add = State()
+    waiting_for_mapping_to_add = State()
+    waiting_for_char_to_remove = State()
+    waiting_for_mapping_to_remove = State()
 
 def make_user_tag(user: types.User) -> str:
     """Повертає тегований username або лінк на користувача для Markdown."""
@@ -36,8 +41,8 @@ class AdminPanel:
         self.dp = dp
         self.admin_ids = ADMIN_IDS
         self.spam_filter = spam_filter
-        self.deleted_messages = {}  # Зберігаємо інформацію про видалені повідомлення
-        self.pending_actions = {}   # Для сумісності з handler
+        self.deleted_messages: dict[int, dict[str, Any]] = {}  # Зберігаємо інформацію про видалені повідомлення
+        self.pending_actions: dict[str, dict[str, Any]] = {}   # Для сумісності з handler
         self.cleanup_old_messages()
 
     def cleanup_old_messages(self):
@@ -85,7 +90,77 @@ class AdminPanel:
         self.dp.message.register(self.process_remove_word, AdminStates.waiting_for_word_to_remove)
         self.dp.message.register(self.process_add_admin, AdminStates.waiting_for_admin_id_to_add)
         self.dp.message.register(self.process_remove_admin, AdminStates.waiting_for_admin_id_to_remove)
+        # FSM для карти символів
+        self.dp.message.register(self.process_add_char, AdminStates.waiting_for_char_to_add)
+        self.dp.message.register(self.process_add_mapping, AdminStates.waiting_for_mapping_to_add)
+        self.dp.message.register(self.process_remove_char, AdminStates.waiting_for_char_to_remove)
+        self.dp.message.register(self.process_remove_mapping, AdminStates.waiting_for_mapping_to_remove)
 
+    async def forward_reported_message(self, message: types.Message, chat_id: int, user_id: int, reporter_id: int):
+        """
+        Пересилає повідомлення, на яке поскаржився користувач, всім адміністраторам
+        """
+        try:
+            message_info = {
+                'user_id': user_id,
+                'chat_id': chat_id,
+                'text': message.text,
+                'timestamp': datetime.now(),
+                'user_username': message.from_user.username,
+                'user_first_name': message.from_user.first_name,
+                'user_last_name': message.from_user.last_name,
+                'chat_title': message.chat.title,
+                'chat_username': message.chat.username,
+                'message_id': message.message_id,
+                'reporter_id': reporter_id
+            }
+            self.deleted_messages[message.message_id] = message_info
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="🚫 Забанити", callback_data=f"ban_user:{user_id}:{chat_id}"),
+                    InlineKeyboardButton(text="🔇 Заглушити", callback_data=f"mute_user:{user_id}:{chat_id}")
+                ],
+                [
+                    InlineKeyboardButton(text="❌ Видалити", callback_data=f"delete_msg:{message.message_id}:{chat_id}"),
+                    InlineKeyboardButton(text="✅ Ігнорувати", callback_data=f"ignore_report:{message.message_id}:{chat_id}")
+                ]
+            ])
+            
+            # Отримуємо інформацію про користувача, який поскаржився
+            try:
+                reporter = await self.bot.get_chat_member(chat_id, reporter_id)
+                reporter_display = make_user_tag(reporter.user)
+            except:
+                reporter_display = f"ID: {reporter_id}"
+            
+            user_display = make_user_tag(message.from_user)
+            chat_display = message_info['chat_title'] or message_info['chat_username'] or f"Chat{chat_id}"
+            # Важливо: екранувати текст повідомлення для Markdown!
+            safe_text = (message.text or "").replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace(']', '\\]')
+            
+            admin_message_text = (
+                f"⚠️ **СКАРГА НА ПОВІДОМЛЕННЯ**\n\n"
+                f"👤 **Користувач:** {user_display}\n"
+                f"🆔 **ID:** `{user_id}`\n"
+                f"🕵️ **Скаржник:** {reporter_display}\n"
+                f"💬 **Чат:** {chat_display}\n"
+                f"📅 **Час:** {datetime.now().strftime('%H:%M:%S')}\n\n"
+                f"📝 **Текст повідомлення:**\n`{safe_text}`"
+            )
+            
+            for admin_id in self.admin_ids:
+                try:
+                    await self.bot.send_message(
+                        chat_id=admin_id,
+                        text=admin_message_text,
+                        reply_markup=keyboard,
+                        parse_mode="Markdown"
+                    )
+                except Exception as e:
+                    print(f"Error sending report to admin {admin_id}: {e}")
+        except Exception as e:
+            print(f"Error processing reported message: {e}")
+            
     async def forward_deleted_message(self, message: types.Message, chat_id: int, user_id: int):
         try:
             message_info = {
@@ -164,6 +239,20 @@ class AdminPanel:
             await self.ban_user_from_callback(callback, data)
         elif data.startswith("restore_msg:"):
             await self.restore_message_from_callback(callback, data)
+        elif data.startswith("delete_msg:"):
+            await self.delete_reported_message(callback, data)
+        elif data.startswith("ignore_report:"):
+            await self.ignore_report(callback, data)
+        elif data.startswith("mute_user:"):
+            await self.mute_user_from_callback(callback, data)
+        elif data == "char_map_btn":
+            await self.show_char_map_menu(callback)
+        elif data == "add_char_btn":
+            await self.start_add_char(callback, state)
+        elif data == "remove_char_btn":
+            await self.start_remove_char(callback, state)
+        elif data == "list_chars_btn":
+            await self.show_char_list(callback)
         else:
             await callback.answer("❌ Невідома дія")
 
@@ -185,6 +274,7 @@ class AdminPanel:
             [InlineKeyboardButton(text="➕ Додати слово", callback_data="add_word_btn")],
             [InlineKeyboardButton(text="➖ Видалити слово", callback_data="remove_word_btn")],
             [InlineKeyboardButton(text="📋 Список слів", callback_data="list_words_btn")],
+            [InlineKeyboardButton(text="🔡 Управління символами", callback_data="char_map_btn")],
             [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_main")]
         ])
         await callback.message.edit_text(
@@ -318,18 +408,94 @@ class AdminPanel:
         )
         await state.set_state(AdminStates.waiting_for_admin_id_to_remove)
 
+    async def mute_user_from_callback(self, callback: types.CallbackQuery, data: str):
+        """Обробляє запит на заглушення користувача"""
+        try:
+            parts = data.split(":")
+            user_id_str, chat_id_str = parts[1], parts[2]
+            user_id: int = int(user_id_str)
+            chat_id: int = int(chat_id_str)
+            
+            await self.bot.restrict_chat_member(
+                chat_id=chat_id,
+                user_id=user_id,
+                permissions=types.ChatPermissions(
+                    can_send_messages=False,
+                    can_send_media_messages=False,
+                    can_send_polls=False,
+                    can_send_other_messages=False,
+                    can_add_web_page_previews=False,
+                    can_change_info=False,
+                    can_invite_users=False,
+                    can_pin_messages=False,
+                ),
+                until_date=datetime.now() + timedelta(days=self.mute_duration_days)
+            )
+            
+            await callback.answer(f"✅ Користувача заглушено на {self.mute_duration_days} днів")
+            await callback.message.edit_text(
+                callback.message.text + "\n\n🔇 **Користувача заглушено**",
+                reply_markup=None,
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            await callback.answer(f"❌ Помилка: {e}")
+    
+    async def delete_reported_message(self, callback: types.CallbackQuery, data: str):
+        """Обробляє запит на видалення повідомлення, на яке поскаржились"""
+        try:
+            parts = data.split(":")
+            msg_id_str, chat_id_str = parts[1], parts[2]
+            msg_id: int = int(msg_id_str)
+            chat_id: int = int(chat_id_str)
+            
+            if msg_id in self.deleted_messages:
+                # Спробуємо видалити повідомлення
+                try:
+                    await self.bot.delete_message(chat_id=chat_id, message_id=msg_id)
+                    await callback.answer("✅ Повідомлення видалено")
+                except Exception as e:
+                    print(f"Error deleting reported message: {e}")
+                    await callback.answer("❌ Не вдалось видалити повідомлення. Можливо, воно вже видалено.")
+                
+                # Оновлюємо повідомлення адміністратора
+                await callback.message.edit_text(
+                    callback.message.text + "\n\n❌ **Повідомлення видалено**",
+                    reply_markup=None,
+                    parse_mode="Markdown"
+                )
+            else:
+                await callback.answer("❌ Повідомлення не знайдено в кеші")
+        except Exception as e:
+            await callback.answer(f"❌ Помилка: {e}")
+    
+    async def ignore_report(self, callback: types.CallbackQuery, data: str):
+        """Обробляє запит на ігнорування скарги"""
+        try:
+            await callback.answer("✅ Скаргу проігноровано")
+            await callback.message.edit_text(
+                callback.message.text + "\n\n✓ **Скаргу проігноровано**",
+                reply_markup=None,
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            await callback.answer(f"❌ Помилка: {e}")
+    
     async def ban_user_from_callback(self, callback: types.CallbackQuery, data: str):
         try:
-            _, user_id, chat_id = data.split(":")
-            user_id, chat_id = int(user_id), int(chat_id)
+            parts = data.split(":")
+            user_id_str, chat_id_str = parts[1], parts[2]
+            user_id: int = int(user_id_str)
+            chat_id: int = int(chat_id_str)
             await self.bot.ban_chat_member(
                 chat_id=chat_id,
                 user_id=user_id,
                 until_date=datetime.now() + timedelta(days=self.ban_duration_days)
             )
-            await callback.answer("✅ Користувача забанено на 30 днів")
+            await callback.answer(f"✅ Користувача забанено на {self.ban_duration_days} днів")
             await callback.message.edit_text(
                 callback.message.text + "\n\n🚫 **Користувача забанено**",
+                reply_markup=None,
                 parse_mode="Markdown"
             )
         except Exception as e:
@@ -337,8 +503,10 @@ class AdminPanel:
 
     async def restore_message_from_callback(self, callback: types.CallbackQuery, data: str):
         try:
-            _, msg_id, chat_id = data.split(":")
-            msg_id, chat_id = int(msg_id), int(chat_id)
+            parts = data.split(":")
+            msg_id_str, chat_id_str = parts[1], parts[2]
+            msg_id: int = int(msg_id_str)
+            chat_id: int = int(chat_id_str)
             if msg_id in self.deleted_messages:
                 msg_info = self.deleted_messages[msg_id]
                 user_display = make_user_tag(types.User(
@@ -395,6 +563,7 @@ class AdminPanel:
                         return
                 await callback.message.edit_text(
                     callback.message.text + "\n\n✅ **Повідомлення повернуто**",
+                    reply_markup=None,
                     parse_mode="Markdown"
                 )
             else:
@@ -635,3 +804,190 @@ class AdminPanel:
             )
         else:
             await message.answer("📋 Список слів фільтрації порожній")
+            
+    async def show_char_map_menu(self, callback: types.CallbackQuery):
+        """Показує меню управління картою символів"""
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="➕ Додати відповідність", callback_data="add_char_btn")],
+            [InlineKeyboardButton(text="➖ Видалити відповідність", callback_data="remove_char_btn")],
+            [InlineKeyboardButton(text="📋 Список відповідностей", callback_data="list_chars_btn")],
+            [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_words")]
+        ])
+        await callback.message.edit_text(
+            "🔤 **Управління відповідністю символів**\n\n"
+            "Ця функція дозволяє створювати відповідність між символами, "
+            "щоб бот міг знаходити спам навіть якщо використані замінники букв.\n\n"
+            "Приклади:\n"
+            "- Прості замінники: 'о' = 'o', 'а' = 'a', 'о' = '0'\n"
+            "- Складні замінники: 'ы' = 'ьі', 'ю' = 'йу', 'щ' = 'shch'\n\n"
+            "Оберіть дію:",
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+        
+    async def start_add_char(self, callback: types.CallbackQuery, state: FSMContext):
+        """Запускає процес додавання відповідності символів"""
+        await callback.message.edit_text(
+            "➕ **Додавання відповідності символів**\n\n"
+            "Введіть символ, який треба шукати (оригінал):\n\n"
+            "💡 Для оригіналу можна використовувати лише один символ (наприклад, 'а').",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="char_map_btn")]
+            ]),
+            parse_mode="Markdown"
+        )
+        await state.set_state(AdminStates.waiting_for_char_to_add)
+        
+    async def process_add_char(self, message: types.Message, state: FSMContext):
+        """Обробляє введення символу для додавання відповідності"""
+        if not self.is_admin(message.from_user.id):
+            return
+            
+        char = message.text.strip()
+        if len(char) != 1:
+            await message.answer("❌ Будь ласка, введіть лише один символ. Багатосимвольні комбінації підтримуються тільки для замінників, але не для оригіналів.")
+            return
+            
+        await state.update_data(char_to_add=char)
+        await message.answer(
+            f"👍 Обрано символ: `{char}`\n\n"
+            f"Тепер введіть символ-замінник або комбінацію символів (на що може бути замінено):",
+            parse_mode="Markdown"
+        )
+        await state.set_state(AdminStates.waiting_for_mapping_to_add)
+        
+    async def process_add_mapping(self, message: types.Message, state: FSMContext):
+        """Обробляє введення символу-замінника"""
+        if not self.is_admin(message.from_user.id):
+            return
+            
+        mapping = message.text.strip()
+        if not mapping:
+            await message.answer("❌ Будь ласка, введіть символ або комбінацію символів.")
+            return
+            
+        data = await state.get_data()
+        char = data.get("char_to_add")
+        
+        try:
+            added = self.spam_filter.add_char_mapping(char, mapping)
+            if added:
+                await message.answer(
+                    f"✅ Додано відповідність: `{char}` → `{mapping}`\n\n"
+                    f"Тепер бот буде розпізнавати `{mapping}` як `{char}` при фільтрації.",
+                    parse_mode="Markdown"
+                )
+            else:
+                await message.answer(f"ℹ️ Відповідність `{char}` → `{mapping}` вже існує.", parse_mode="Markdown")
+        except Exception as e:
+            await message.answer(f"❌ Помилка додавання відповідності: {e}")
+            
+        await state.clear()
+        
+    async def start_remove_char(self, callback: types.CallbackQuery, state: FSMContext):
+        """Запускає процес видалення відповідності символів"""
+        await callback.message.edit_text(
+            "➖ **Видалення відповідності символів**\n\n"
+            "Введіть символ, для якого потрібно видалити відповідність (оригінал):",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="char_map_btn")]
+            ]),
+            parse_mode="Markdown"
+        )
+        await state.set_state(AdminStates.waiting_for_char_to_remove)
+        
+    async def process_remove_char(self, message: types.Message, state: FSMContext):
+        """Обробляє введення символу для видалення відповідності"""
+        if not self.is_admin(message.from_user.id):
+            return
+            
+        char = message.text.strip()
+        if len(char) != 1:
+            await message.answer("❌ Будь ласка, введіть лише один символ.")
+            return
+            
+        char_map = self.spam_filter.get_char_map()
+        if char not in char_map or not char_map[char]:
+            await message.answer(f"❌ Символ `{char}` не має відповідностей.", parse_mode="Markdown")
+            await state.clear()
+            return
+            
+        await state.update_data(char_to_remove=char)
+        # Використовуємо більш безпечний вивід для багатосимвольних заміників
+        mappings = ", ".join([f"`{m}`" for m in char_map[char]])
+        
+        await message.answer(
+            f"👍 Знайдено відповідності для символу `{char}`: {mappings}\n\n"
+            f"Тепер введіть символ або комбінацію символів-замінників, яку треба видалити:",
+            parse_mode="Markdown"
+        )
+        await state.set_state(AdminStates.waiting_for_mapping_to_remove)
+        
+    async def process_remove_mapping(self, message: types.Message, state: FSMContext):
+        """Обробляє введення символу-замінника для видалення"""
+        if not self.is_admin(message.from_user.id):
+            return
+            
+        mapping = message.text.strip()
+        if not mapping:
+            await message.answer("❌ Будь ласка, введіть символ або комбінацію символів.")
+            return
+            
+        data = await state.get_data()
+        char = data.get("char_to_remove")
+        
+        try:
+            removed = self.spam_filter.remove_char_mapping(char, mapping)
+            if removed:
+                await message.answer(
+                    f"✅ Видалено відповідність: `{char}` → `{mapping}`",
+                    parse_mode="Markdown"
+                )
+            else:
+                await message.answer(
+                    f"❌ Відповідність `{char}` → `{mapping}` не знайдена.",
+                    parse_mode="Markdown"
+                )
+        except Exception as e:
+            await message.answer(f"❌ Помилка видалення відповідності: {e}")
+            
+        await state.clear()
+        
+    async def show_char_list(self, callback: types.CallbackQuery):
+        """Показує список всіх відповідностей символів"""
+        char_map = self.spam_filter.get_char_map()
+        
+        if not char_map:
+            await callback.message.edit_text(
+                "📋 **Список відповідностей символів**\n\n"
+                "Словник відповідностей порожній.\n\n"
+                "Додайте відповідності для покращення розпізнавання спаму.",
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🔙 Назад", callback_data="char_map_btn")]
+                ]),
+                parse_mode="Markdown"
+            )
+            return
+            
+        # Сортуємо символи за алфавітом
+        chars = sorted(char_map.keys())
+        
+        text_parts = ["📋 **Список відповідностей символів**\n\n"]
+        for char in chars:
+            mappings = ", ".join(char_map[char])
+            text_parts.append(f"`{char}` → {mappings}")
+            
+        # Об'єднуємо всі частини тексту з розділенням новим рядком
+        text = "\n".join(text_parts)
+        
+        # Перевіряємо довжину тексту, щоб не перевищити ліміт Telegram
+        if len(text) > 4000:
+            text = text[:3900] + "\n\n... (список скорочено через обмеження Telegram)"
+            
+        await callback.message.edit_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔙 Назад", callback_data="char_map_btn")]
+            ]),
+            parse_mode="Markdown"
+        )
