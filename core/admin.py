@@ -371,14 +371,9 @@ class AdminPanel:
 
     async def show_words_list(self, callback: types.CallbackQuery):
         patterns = self.spam_filter.get_patterns()
-        def esc(t: str) -> str:
-            """Екранує спецсимволи Markdown V2"""
-            for c in '_*[]()~`>#+-=|{}.!':
-                t = t.replace(c, '\\' + c)
-            return t
         if patterns:
-            patterns_text = "\n".join([f"• {esc(pattern)}" for pattern in patterns])
-            text = f"📋 **Список слів фільтрації:**\n\n{patterns_text}"
+            patterns_text = "\n".join([f"• {pattern}" for pattern in patterns])
+            text = f"📋 Список слів фільтрації:\n\n{patterns_text}"
         else:
             text = "📋 Список слів фільтрації порожній"
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -386,8 +381,7 @@ class AdminPanel:
         ])
         await callback.message.edit_text(
             text,
-            reply_markup=keyboard,
-            parse_mode="Markdown"
+            reply_markup=keyboard
         )
 
     async def start_add_admin(self, callback: types.CallbackQuery, state: FSMContext):
@@ -791,17 +785,9 @@ class AdminPanel:
         if not self.is_admin(message.from_user.id):
             return
         patterns = self.spam_filter.get_patterns()
-        def esc(t: str) -> str:
-            """Екранує спецсимволи Markdown V2"""
-            for c in '_*[]()~`>#+-=|{}.!':
-                t = t.replace(c, '\\' + c)
-            return t
         if patterns:
-            patterns_text = "\n".join([f"• {esc(pattern)}" for pattern in patterns])
-            await message.answer(
-                f"📋 **Список слів фільтрації:**\n\n{patterns_text}",
-                parse_mode="Markdown"
-            )
+            patterns_text = "\n".join([f"• {pattern}" for pattern in patterns])
+            await message.answer(f"📋 Список слів фільтрації:\n\n{patterns_text}")
         else:
             await message.answer("📋 Список слів фільтрації порожній")
             
